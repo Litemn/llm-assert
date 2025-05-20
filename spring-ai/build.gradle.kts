@@ -2,7 +2,7 @@ plugins {
     kotlin("jvm")
 }
 
-group = "com.open-tool"
+group = "com.litemn"
 version = "0.0.1"
 
 repositories {
