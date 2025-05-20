@@ -6,35 +6,35 @@ interface LlmAssertion {
 
     fun assertTrue(prompt: String, media: Collection<Media> = emptyList()) {
         val response = parseResult(assert(prompt, media))
-        if (response is BooleanParsedResult && !response.value) {
+        if (response is BooleanResult && !response.value) {
             throw AssertionError("Assertion failed: $prompt, LLM response: false")
         }
-        if (response is UnparsedResult) {
+        if (response is Unparsed) {
             throw AssertionError("Fail to parse llm-assert: $prompt, LLM response: $response")
         }
     }
 
     fun assertFalse(prompt: String, media: Collection<Media> = emptyList()) {
         val response = parseResult(assert(prompt, media))
-        if (response is BooleanParsedResult && response.value) {
+        if (response is BooleanResult && response.value) {
             throw AssertionError("Assertion failed: $prompt, LLM response: $response")
         }
-        if (response is UnparsedResult) {
+        if (response is Unparsed) {
             throw AssertionError("Fail to parse llm-assert: $prompt, LLM response: $response")
         }
     }
 
-    fun parseResult(response: AssertCallResult): ParsedResult {
+    fun parseResult(response: AssertCallResult): ParseResult {
         val trim = response.text.trim()
         if (trim.equals("true", true) || trim.equals("false", true)) {
-            return BooleanParsedResult(trim.toBoolean())
+            return BooleanResult(trim.toBoolean())
         }
-        return UnparsedResult(trim)
+        return Unparsed(trim)
     }
 }
 
-interface ParsedResult
+sealed interface ParseResult
 
-data class UnparsedResult(val text: String) : ParsedResult
+data class Unparsed(val text: String) : ParseResult
 
-data class BooleanParsedResult(val value: Boolean) : ParsedResult
+data class BooleanResult(val value: Boolean) : ParseResult
