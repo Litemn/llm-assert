@@ -27,7 +27,7 @@ TODO
 val openAiApi = OpenAiApi.builder()
     .apiKey(System.getenv("OPENAI_API_KEY"))
     .build()
-    
+
 val openAiChatOptions = OpenAiChatOptions.builder()
     .model("gpt-4o-mini")
     .temperature(0.0)
@@ -37,7 +37,7 @@ val chatModel = OpenAiChatModel.builder()
     .openAiApi(openAiApi)
     .defaultOptions(openAiChatOptions)
     .build()
-    
+
 val provider = SpringAiProvider(chatModel)
 
 // Create the assertion instance
@@ -111,3 +111,6 @@ Interface for LLM providers:
 
 - `call(prompt: AssertPrompt): AssertCallResult` - Call the LLM with the given prompt
 
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
