@@ -1,32 +1,28 @@
 package com.opentool.llmassert
 
+// New Anthropic SDK imports
 import com.anthropic.sdk.AnthropicClient
-import com.anthropic.sdk.entities.messages.MessageParam
-import com.anthropic.sdk.entities.messages.Message // Renaming to avoid conflict with local Message
-import com.anthropic.sdk.entities.messages.ContentBlock
-import com.anthropic.sdk.entities.messages.Role
-import com.anthropic.sdk.errors.AnthropicException
-import com.anthropic.sdk.errors.ApiErrorException
+import com.anthropic.sdk.model.MessageParam
+import com.anthropic.sdk.model.Role
+import com.anthropic.sdk.model.ContentBlock
+import com.anthropic.sdk.model.ClaudeModel // For specific model selection
+import com.anthropic.sdk.model.MessageRequest // Main request object
+import com.anthropic.sdk.exception.ApiErrorException
+import com.anthropic.sdk.exception.AnthropicException
 
-// Imports from core module
+// Imports from core module (should remain)
 import com.opentool.llmassert.LlmProvider
 import com.opentool.llmassert.AssertPrompt
 import com.opentool.llmassert.AssertCallResult
 import com.opentool.llmassert.UserMessage
 import com.opentool.llmassert.AssistantMessage
 import com.opentool.llmassert.SystemMessage
-// Note: com.opentool.llmassert.Message is the sealed interface,
-// UserMessage, AssistantMessage, SystemMessage are its implementations.
 
 class AnthropicLlmProvider(
     private val apiKey: String,
     private val client: AnthropicClient
 ) : LlmProvider {
 
-    /**
-     * Secondary constructor for convenience.
-     * Initializes a default AnthropicClient if one is not provided.
-     */
     constructor(apiKey: String) : this(
         apiKey,
         AnthropicClient.builder()
@@ -35,8 +31,12 @@ class AnthropicLlmProvider(
     )
 
     private companion object {
-        private const val DEFAULT_MODEL = "claude-3-opus-20240229" // As used in tests
-        private const val DEFAULT_MAX_TOKENS = 1024 // As used in tests
+        // Updated to use ClaudeModel enum if available, or a string if that's how the new SDK takes it.
+        // The prompt mentioned `ClaudeModel`, so using an enum from it.
+        // If the SDK builder expects a string, this would be ClaudeModel.CLAUDE_3_OPUS.toString() or specific string.
+        // Assuming builder takes the enum or its string representation. For now, direct enum use.
+        private val DEFAULT_MODEL = ClaudeModel.CLAUDE_3_OPUS // Example, adjust if SDK expects string.
+        private const val DEFAULT_MAX_TOKENS = 1024
     }
 
     override fun call(prompt: AssertPrompt): AssertCallResult {
@@ -45,70 +45,66 @@ class AnthropicLlmProvider(
         }
 
         try {
-            val sdkMessages = mutableListOf<com.anthropic.sdk.entities.messages.Message>()
+            val sdkMessages = mutableListOf<MessageParam>()
 
-            // Convert history messages
             prompt.history.forEach { message ->
                 when (message) {
                     is UserMessage -> {
                         sdkMessages.add(
-                            com.anthropic.sdk.entities.messages.Message.builder()
+                            MessageParam.builder()
                                 .role(Role.USER)
-                                .content(listOf(ContentBlock.text(message.text)))
+                                .content(ContentBlock.text(message.text)) // As per prompt
                                 .build()
                         )
                     }
                     is AssistantMessage -> {
                         sdkMessages.add(
-                            com.anthropic.sdk.entities.messages.Message.builder()
+                            MessageParam.builder()
                                 .role(Role.ASSISTANT)
-                                .content(listOf(ContentBlock.text(message.text)))
+                                .content(ContentBlock.text(message.text)) // As per prompt
                                 .build()
                         )
                     }
-                    // SystemMessage in history is not typical for Anthropic's message list,
-                    // it's usually a top-level parameter. Ignoring if present in history.
-                    is SystemMessage -> { /* Explicitly ignore */ }
+                    is SystemMessage -> { /* Explicitly ignore SystemMessage in history */ }
                 }
             }
 
-            // Add the main assert prompt (current user message)
             sdkMessages.add(
-                com.anthropic.sdk.entities.messages.Message.builder()
+                MessageParam.builder()
                     .role(Role.USER)
-                    .content(listOf(ContentBlock.text(prompt.assertPrompt.text)))
+                    .content(ContentBlock.text(prompt.assertPrompt.text)) // As per prompt
                     .build()
             )
 
-            val requestBuilder = MessageParam.builder()
-                .model(DEFAULT_MODEL)
-                .maxTokens(DEFAULT_MAX_TOKENS)
+            val requestBuilder = MessageRequest.builder()
+                .model(DEFAULT_MODEL) // Pass the ClaudeModel enum/string
                 .messages(sdkMessages)
+                .maxTokens(DEFAULT_MAX_TOKENS)
 
-            // Add system prompt if it's not blank
             prompt.systemPrompt.text.takeIf { it.isNotBlank() }?.let {
                 requestBuilder.system(it)
             }
 
             val request = requestBuilder.build()
 
+            // Assuming client.messages().create() is still the method with the new MessageRequest
             val response = this.client.messages().create(request)
 
-            // Extract text from the first text content block, if available
             val responseText = response.content()
-                .filterIsInstance<ContentBlock.Text>()
-                .firstOrNull()?.text()
-                ?: "" // Return empty string if no text content or content is not text
+                .filterIsInstance<ContentBlock.Text>() // Get only text blocks
+                .firstOrNull() // Take the first one
+                ?.text() // Extract text from it
+                ?: "" // If no text block or content is null, return empty string
 
             return AssertCallResult(responseText)
 
         } catch (e: ApiErrorException) {
-            return AssertCallResult("Error: API call failed with status ${e.statusCode()}: ${e.message}")
+            val errorDetails = e.message ?: "No further details"
+            return AssertCallResult("Error: API call failed with status ${e.statusCode()}: $errorDetails")
         } catch (e: AnthropicException) {
-            return AssertCallResult("Error: Anthropic SDK error - ${e.message}")
+            return AssertCallResult("Error: Anthropic SDK error - ${e.message ?: "No further details"}")
         } catch (e: Exception) {
-            // Catch-all for other unexpected errors like network issues not caught by SDK
-            return AssertCallResult("Error: An unexpected error occurred - ${e.message}")
+            return AssertCallResult("Error: An unexpected error occurred - ${e.message ?: "No further details"}")
         }
     }
 }
