@@ -4,3 +4,4 @@ plugins {
 rootProject.name = "llm-assert"
 include("core")
 include("spring-ai")
+include("anthropic")
